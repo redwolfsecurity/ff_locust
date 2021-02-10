@@ -7,7 +7,7 @@ import time
 # Handle traceback to string
 import traceback
 
-class ff_locust():    
+class FF_Locust():    
     def __init__(self):
         print('FF_INITIALIZED')
         events.request_success.add_listener(self.hook_request_success)
