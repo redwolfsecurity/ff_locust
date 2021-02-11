@@ -9,7 +9,14 @@ import traceback
 # To request table server API
 import requests
 # For environment variables
-import os              
+import os
+# To manage file paths
+from pathlib import Path
+# To get a random line from file
+import random
+# Pandas - a greate data management tool
+# Used to read tsv
+import pandas as pd
 
 
 class FF_Locust():    
@@ -42,6 +49,10 @@ class FF_Locust():
                     self.is_remote_reachable = False
             except:
                 self.is_remote_reachable = False
+        if self.is_local:
+            self.ff_log({"description": "FF_TABLE_SERVER_URL environment variable not found. FF Locust Running in local mode and will look for local tsv files"})
+        else:
+            self.ff_log({"description": "FF_TABLE_SERVER_URL environment variable found. FF Locust Running in remote mode and will look for data at {}".format(self.url)})
 
     ##############################################################################
     # Fired when a request is completed successfully. This event is typically used to report requests when writing custom clients for locust.
@@ -180,45 +191,86 @@ class FF_Locust():
         if table == None:
             self.error({"description": "No table provided to get data from."})
             return False
-        # Check if table has .extension and strip
-        if (table[-4:].lower() == '.tsv'):
-            table = table.split('.')[0]
-        if (table not in self.tables):
-            self.tables[table] = {"is_done": False}
-        try:
-            request = requests.get(self.url + 'list/get/' + table + '/next')
-            if request.status_code == 200:
-                data = request.json()
-                if ('error' in data):
-                    self.error({"description": "Table service reported an error.", "message": data['error']})
-                    return False
-                if (not looping):
-                    if (data['__remaining_count'] == 1 and not self.tables[table]['is_done']):
-                        self.tables[table] = {"is_done": True}
+        if self.is_local:
+            if (table[-4:].lower() != '.tsv'):
+                self.error({"decription": "Input table file does not end in .tsv"})
+                return False
+            self.error({"description": "Local version of get_next_data is not yet complete.", "is_error": True})
+            return False
+        else:
+            # Check if table has .extension and strip
+            if (table[-4:].lower() == '.tsv'):
+                table = table.split('.')[0]
+            if (table not in self.tables):
+                self.tables[table] = {"is_done": False}
+            try:
+                request = requests.get(self.url + 'list/get/' + table + '/next')
+                if request.status_code == 200:
+                    data = request.json()
+                    if ('is_error' in data):
+                        self.error({"description": "Table service reported an error.", "message": data['short_description']})
+                        return False
+                    if (not looping):
+                        if (data['__remaining_count'] == 1 and not self.tables[table]['is_done']):
+                            self.tables[table] = {"is_done": True}
+                            self.ff_log(data)
+                            return data
+                        else:
+                            if ('is_done' in self.tables[table]):
+                                if (self.tables[table]["is_done"]):
+                                    return None
                         self.ff_log(data)
                         return data
                     else:
-                        if ('is_done' in self.tables[table]):
-                            if (self.tables[table]["is_done"]):
-                                return None
-                    self.ff_log(data)
+                        self.ff_log(data)
+                        return data
+                else:
+                    self.error({"description": "Failed to access ff table service.", "status_code": request.status_code})    
+            except Exception as error:
+                self.error({"description": "Failed to access ff table service.", "message": error})
+
+    def get_data_random(self, table = None):
+        if table == None:
+            self.error({"description": "No table provided to get data from."})
+            return False
+        if self.is_local:
+            if (table[-4:].lower() != '.tsv'):
+                self.error({"decription": "Input table file does not end in .tsv"})
+                return False
+            # Look for file
+            file_path = Path(__file__).parents[0] / table
+            # lines = open(file_path).read().splitlines()
+            # Use pandas to read tsv
+            try:
+                df = pd.read_csv(file_path, sep='\t', header=0)
+                tsv = list(df.T.to_dict().values())
+                return random.choice(tsv)
+            except Exception as error:
+                self.error({"description": "Failed to read tsv file {}. Check it's existence and ensure it is a well formatted tsv file with column headers.", "is_error": True})
+                return False
+        else:
+            # Check if table has .extension and strip
+            if (table[-4:].lower() == '.tsv'):
+                table = table.split('.')[0]
+            try:
+                request = requests.get(self.url + 'list/get/' + table + '/random')
+                if request.status_code == 200:
+                    data = request.json()
+                    if ('is_error' in data):
+                        self.error({"description": "Table service reported an error.", "message": data['short_description']})
+                        return False
                     return data
                 else:
-                    self.ff_log(data)
-                    return data
-            else:
-                self.error({"description": "Failed to access ff table service.", "status_code": request.status_code})    
-        except Exception as error:
-            self.error({"description": "Failed to access ff table service.", "message": error})
+                    self.error({"description": "Failed to access ff table service.", "status_code": request.status_code})    
+            except Exception as error:
+                self.error({"description": "Failed to access ff table service.", "message": error})
+        
 
     def error(self, error_json):
         self.ff_log(error_json)
     
     def event(self, event_json):
         self.ff_log(event_json)
-            
-    def get_data_random(self, table):
-        pass # TODO: implement
 
     # helper to create FF_LOG formatted metrics JSON logs
     # input metric JSON
