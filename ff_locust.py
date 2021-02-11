@@ -223,7 +223,3 @@ class FF_Locust():
     def ff_log(self, ff_json):
         # Print JSON
         print("FF_LOG {}".format(ff_json))
-
-ff_locust = FF_Locust()
-for i in range(60):
-    print(ff_locust.get_data_next(table = 'rw_clids_zerostream_5_30122020_1.tsv', looping = False))
