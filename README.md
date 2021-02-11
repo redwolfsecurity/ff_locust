@@ -11,6 +11,7 @@
 
 - Runs on Python 3.8
 - Requires `requests` library
+- Requires `locust` library
 
 ### Importing
 ```py
