@@ -195,13 +195,16 @@ class FF_Locust():
                 if (not looping):
                     if (data['__remaining_count'] == 1 and not self.tables[table]['is_done']):
                         self.tables[table] = {"is_done": True}
+                        self.ff_log(data)
                         return data
                     else:
                         if ('is_done' in self.tables[table]):
                             if (self.tables[table]["is_done"]):
                                 return None
+                    self.ff_log(data)
                     return data
                 else:
+                    self.ff_log(data)
                     return data
             else:
                 self.error({"description": "Failed to access ff table service.", "status_code": request.status_code})    
