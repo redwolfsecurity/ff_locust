@@ -6,6 +6,11 @@ import json
 import time
 # Handle traceback to string
 import traceback
+# To request table server API
+import requests
+# For environment variables
+import os              
+
 
 class FF_Locust():    
     def __init__(self):
@@ -20,15 +25,32 @@ class FF_Locust():
         events.quitting.add_listener(self.hook_quitting)
         events.worker_report.add_listener(self.hook_worker_report)
         events.report_to_master.add_listener(self.hook_report_to_master)
+        self.url = os.getenv('FF_TABLE_SERVER_URL')
+        self.tables = {} # store table state
+        # self.table = os.getenv('TABLE')
+        if self.url is None:
+            self.is_local = True
+        else:
+            self.is_local = False
+
+        if self.is_local is False:
+            try:
+                request = requests.get( url )
+                if request.status_code == 200:
+                    self.is_remote_reachable = True
+                else:
+                    self.is_remote_reachable = False
+            except:
+                self.is_remote_reachable = False
 
     ##############################################################################
     # Fired when a request is completed successfully. This event is typically used to report requests when writing custom clients for locust.
     # 
-    # request_type – Request type method used
-    # name – Path to the URL that was called (or override name if it was used in the call to the client)
+    # request_type - Request type method used
+    # name - Path to the URL that was called (or override name if it was used in the call to the client)
     #        EXAMPLE: "03. SaveForm - /form"
-    # response_time – Response time in milliseconds
-    # response_length – Content-length of the response
+    # response_time:Response time in milliseconds
+    # response_length:Content-length of the response
     # **kw is future proofing against addition of new parameters
     def hook_request_success(self, request_type, name, response_time, response_length, **kw):
         self.ff_log(self.ff_metric("request_success", 
@@ -38,11 +60,11 @@ class FF_Locust():
     ##############################################################################
     # Fired when a request fails. This event is typically used to report failed requests when writing custom clients for locust.
     # 
-    # request_type – Request type method used
-    # name – Path to the URL that was called (or override name if it was used in the call to the client)
-    # response_time – Time in milliseconds until exception was thrown
-    # response_length – Content-length of the response
-    # exception – Exception instance that was thrown
+    # request_type:Request type method used
+    # name:Path to the URL that was called (or override name if it was used in the call to the client)
+    # response_time:Time in milliseconds until exception was thrown
+    # response_length:Content-length of the response
+    # exception:Exception instance that was thrown
     # **kw is future proofing against addition of new parameters
     def hook_request_fail(self, request_type, name, response_time, response_length, exception, **kw):
         self.ff_log(self.ff_metric("request_failure",
@@ -52,7 +74,7 @@ class FF_Locust():
     ##############################################################################
     # Fired when all simulated users has been spawned.
     # 
-    # user_count – Number of users that were spawned
+    # user_count:Number of users that were spawned
     # **kw is future proofing against addition of new parameters
     # @events.spawning_complete.add_listener
     def hook_spawning_complete(self, user_count, **kw):
@@ -67,7 +89,7 @@ class FF_Locust():
         self.ff_log(self.ff_metric("test_stop", {"count": 1}))
 
     ##############################################################################
-    # Fired when a new load test is started. It’s not fired again if the number of users change during a test.
+    # Fired when a new load test is started. It's not fired again if the number of users change during a test.
     # When running locust distributed the event is only fired on the master node and not on each worker node.
     # 
     # **kw is future proofing against addition of new parameters
@@ -78,9 +100,9 @@ class FF_Locust():
     # Fired when an exception occurs inside the execution of a User class.
     # We cannot create fields from exception or tb or user_instance parameters because they are not serializable.
     #
-    # user_instance – User class instance where the exception occurred
-    # exception – Exception that was thrown
-    # tb – Traceback object (from e.__traceback__)
+    # user_instance:User class instance where the exception occurred
+    # exception:Exception that was thrown
+    # tb:Traceback object (from e.__traceback__)
     # **kw is future proofing against addition of new parameters
     def hook_user_error(self, user_instance, exception, tb, **kw):
         # print('FF EXCEPTION', exception)
@@ -92,30 +114,30 @@ class FF_Locust():
     ##############################################################################
     # Fired when the locust process is exiting
     #
-    # environment – Locust environment instance 
+    # environment:Locust environment instance 
     # **kw is future proofing against addition of new parameters
     def hook_quitting(self, environment, **kw):
         self.ff_log(self.ff_metric("quitting",
             {"count": 1}, {"url": environment.host}))
 
     ##############################################################################
-    # Used when Locust is running in –master mode and is fired when the master server receives a report from a Locust worker server.
+    # Used when Locust is running in master mode and is fired when the master server receives a report from a Locust worker server.
     # This event can be used to aggregate data from the locust worker servers.
     #
-    # client_id – Client id of the reporting worker
-    # data – Data dict with the data from the worker node
+    # client_id:Client id of the reporting worker
+    # data:Data dict with the data from the worker node
     # **kw is future proofing against addition of new parameters
     def hook_worker_report(self, client_id, data, **kw):
         self.ff_log(self.ff_metric("worker_report",
             data, {"client_id": client_id}))
 
     ##############################################################################
-    # Used when Locust is running in –worker mode. It can be used to attach data to the dicts that are regularly sent to the master.
-    # It’s fired regularly when a report is to be sent to the master server.
-    # Note that the keys “stats” and “errors” are used by Locust and shouldn’t be overridden.
+    # Used when Locust is running in worker mode. It can be used to attach data to the dicts that are regularly sent to the master.
+    # It's fired regularly when a report is to be sent to the master server.
+    # Note that the keys 'stats' and 'errors' are used by Locust and shouldn't be overridden.
     #
-    # client_id – The client id of the running locust process.
-    # data – Data dict that can be modified in order to attach data that should be sent to the master.
+    # client_id:The client id of the running locust process.
+    # data:Data dict that can be modified in order to attach data that should be sent to the master.
     # **kw is future proofing against addition of new parameters
     def hook_report_to_master(self, client_id, data, **kw):
         self.ff_log(self.ff_metric("report_to_master",
@@ -124,10 +146,10 @@ class FF_Locust():
 
     ##############################################################################
     # Fired when Locust is started, once the Environment instance and locust runner instance have been created.
-    # This hook can be used by end-users’ code to run code that requires access to the Environment.
+    # This hook can be used by end-users' code to run code that requires access to the Environment.
     # For example to register listeners to request_success, request_failure or other events.
     #
-    # environment – Environment instance
+    # environment:Environment instance
     # **kw is future proofing against addition of new parameters
     def hook_init(self, environment, **kw):
         self.ff_log(self.ff_metric("init", {"count": 1}, {"url": environment.host}))
@@ -154,9 +176,54 @@ class FF_Locust():
         metric_json = json.dumps(metric_object)
         return metric_json
 
+    def get_data_next(self, table = None, looping = True):
+        if table == None:
+            self.error({"description": "No table provided to get data from."})
+            return False
+        # Check if table has .extension and strip
+        if (table[-4:].lower() == '.tsv'):
+            table = table.split('.')[0]
+        if (table not in self.tables):
+            self.tables[table] = {"is_done": False}
+        try:
+            request = requests.get(self.url + 'list/get/' + table + '/next')
+            if request.status_code == 200:
+                data = request.json()
+                if ('error' in data):
+                    self.error({"description": "Table service reported an error.", "message": data['error']})
+                    return False
+                if (not looping):
+                    if (data['__remaining_count'] == 1 and not self.tables[table]['is_done']):
+                        self.tables[table] = {"is_done": True}
+                        return data
+                    else:
+                        if ('is_done' in self.tables[table]):
+                            if (self.tables[table]["is_done"]):
+                                return None
+                    return data
+                else:
+                    return data
+            else:
+                self.error({"description": "Failed to access ff table service.", "status_code": request.status_code})    
+        except Exception as error:
+            self.error({"description": "Failed to access ff table service.", "message": error})
+
+    def error(self, error_json):
+        self.ff_log(error_json)
+    
+    def event(self, event_json):
+        self.ff_log(event_json)
+            
+    def get_data_random(self, table):
+        pass # TODO: implement
+
     # helper to create FF_LOG formatted metrics JSON logs
     # input metric JSON
     # output FF_LOG {JSON}
-    def ff_log(self, metric_json):
+    def ff_log(self, ff_json):
         # Print JSON
-        print("FF_LOG {}".format(metric_json))
+        print("FF_LOG {}".format(ff_json))
+
+ff_locust = FF_Locust()
+for i in range(60):
+    print(ff_locust.get_data_next(table = 'rw_clids_zerostream_5_30122020_1.tsv', looping = False))
