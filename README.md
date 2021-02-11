@@ -29,7 +29,7 @@ fancy_locust = FF_Locust()
 # Errors:
 # Current implementation logs errors with 'FF_LOG' prepended.
 # In the case of an error the return is False.
-fancy_locust.get_data_next(table = 'users.tsv', looping = True)
+json = fancy_locust.get_data_next(table = 'users.tsv', looping = True)
 
 # The above will output JSON like:
 # {
@@ -42,4 +42,7 @@ fancy_locust.get_data_next(table = 'users.tsv', looping = True)
 #    'last_name': 'Doe'
 # }
 # Where first_name and last_name are column headers in the provided users.tsv file.
+# These parameters are accessible VIA:
+first_name = json['first_name']
+last_name = json['last_name']
 ```
