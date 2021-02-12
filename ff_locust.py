@@ -186,17 +186,96 @@ class FF_Locust():
         # Convert python object into JSON
         metric_json = json.dumps(metric_object)
         return metric_json
+    
+    def get_table_metadata(self, table):
+        if table is None:
+            self.error({"description": "No table provided to get metadata for.", "is_error": True})
+            return {}
+        if table[-4:] == '.tsv':
+            table = table[:-4]
+        if table not in self.tables:
+            self.error({"description": "No metadata found for table: {}".format(table), "is_error": True})
+            return {}
+        return self.tables[table]
+
+    def set_table_metadata(self, table, tsv):
+        if table is None:
+            self.error({"description": "No table provided to set metadata for.", "is_error": True})
+            return
+        if tsv is None:
+            self.error({"description": "No tsv provided to set metadata for.", "is_error": True})
+            return
+        if table[-4:] == '.tsv':
+            table = table[:-4]
+        if table not in self.tables:
+            self.tables[table] = {
+                "__index": 0
+            }
+        self.tables[table].update({
+            '__list': table,
+            '__timestamp_epoch_ms': round(time.time() * 1000),
+            '__remaining_count': len(tsv) - self.tables[table]['__index'],
+            '__list_count': len(tsv)
+        })
+
+    def set_next_index(self, table):
+        if table is None:
+            self.error({"description": "No table provided to increase index for.", "is_error": True})
+            return
+        if table[-4:] == '.tsv':
+            table = table[:-4]
+        if table not in self.tables:
+            self.error({"description": "Table metadata not found, can't increase index.", "is_error": True})
+            return
+        if '__index' not in self.tables[table]:
+            self.error({"description": "Table metadata not set, index must be set before increasing it.", "is_error": True})
+            return
+        self.tables[table]['__index'] += 1
 
     def get_data_next(self, table = None, looping = True):
         if table == None:
-            self.error({"description": "No table provided to get data from."})
+            self.error({"description": "No table provided to metadata for.", "is_error": True})
             return False
         if self.is_local:
             if (table[-4:].lower() != '.tsv'):
-                self.error({"decription": "Input table file does not end in .tsv"})
+                self.error({"decription": "Input table file does not end in .tsv", "is_error": True})
                 return False
-            self.error({"description": "Local version of get_next_data is not yet complete.", "is_error": True})
-            return False
+            # self.error({"description": "Local version of get_next_data is not yet complete.", "is_error": True})
+            # return False
+            # Look for file
+            file_path = Path(__file__).parents[0] / table
+            # lines = open(file_path).read().splitlines()
+            # Use pandas to read tsv
+            try:
+                df = pd.read_csv(file_path, sep='\t', header=0)
+                tsv = list(df.T.to_dict().values())
+            except Exception as error:
+                self.error({"description": "Failed to read tsv file {}. Check it's existence and ensure it is a well formatted tsv file with column headers.".format(file_path), "is_error": True})
+                return False
+            # We set table metadata (if metadata is already set its updated and index remains the same)
+            self.set_table_metadata(table, tsv)
+            # We must return an object like:
+            # {
+            #    '__list': 'users',
+            #    '__timestamp_epoch_ms': 1613070277418,
+            #    '__index': 0,
+            #    '__remaining_count': 1,
+            #    '__list_count': 1,
+            #    'first_name': 'John',
+            #    'last_name': 'Doe'
+            # }
+            metadata = self.get_table_metadata(table) # get table metadata (__ attributes above)
+            index = metadata["__index"]
+            if (looping and index == metadata['__list_count']):
+                # reset index
+                index = 0
+                self.tables[table[:-4]]['__index'] = 0
+            if (not looping and index == metadata['__list_count']):
+                return None
+            result = tsv[index] # get tsv row at index
+            result.update(metadata) # add metadata
+            self.set_next_index(table) # Update table index
+            return result
         else:
             # Check if table has .extension and strip
             if (table[-4:].lower() == '.tsv'):
@@ -231,11 +310,11 @@ class FF_Locust():
 
     def get_data_random(self, table = None):
         if table == None:
-            self.error({"description": "No table provided to get data from."})
+            self.error({"description": "No table provided to get data from.", "is_error": true})
             return False
         if self.is_local:
             if (table[-4:].lower() != '.tsv'):
-                self.error({"decription": "Input table file does not end in .tsv"})
+                self.error({"decription": "Input table file does not end in .tsv", "is_error": true})
                 return False
             # Look for file
             file_path = Path(__file__).parents[0] / table
@@ -246,7 +325,7 @@ class FF_Locust():
                 tsv = list(df.T.to_dict().values())
                 return random.choice(tsv)
             except Exception as error:
-                self.error({"description": "Failed to read tsv file {}. Check it's existence and ensure it is a well formatted tsv file with column headers.", "is_error": True})
+                self.error({"description": "Failed to read tsv file {}. Check it's existence and ensure it is a well formatted tsv file with column headers.".format(file_path), "is_error": True})
                 return False
         else:
             # Check if table has .extension and strip

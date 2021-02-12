@@ -7,4 +7,6 @@ ff_locust_test.py
 
 ff_locust.pyc
 
+__pycache__
+
 *.tsv
