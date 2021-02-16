@@ -67,7 +67,7 @@ class FF_Locust():
     # **kw is future proofing against addition of new parameters
     def hook_request_success(self, request_type, name, response_time, response_length, **kw):
         self.ff_log(self.ff_metric("url", 
-            {"response_time_ms": math.ceil(response_time), "content_length_bytes": response_length},
+            {"total_time_ms": math.ceil(response_time), "content_length_bytes": response_length},
             {"operation": name, "method": request_type.upper()}))
 
     ##############################################################################
@@ -81,7 +81,7 @@ class FF_Locust():
     # **kw is future proofing against addition of new parameters
     def hook_request_fail(self, request_type, name, response_time, response_length, exception, **kw):
         self.ff_log(self.ff_metric("url",
-            {"response_time_ms": math.ceil(response_time), "content_length_bytes": response_length, "exception": str(exception)},
+            {"total_time_ms": math.ceil(response_time), "content_length_bytes": response_length, "exception": str(exception)},
             {"operation": name, "method": request_type.upper(), "is_error": True}))
 
     ##############################################################################
