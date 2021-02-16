@@ -68,7 +68,7 @@ class FF_Locust():
     def hook_request_success(self, request_type, name, response_time, response_length, **kw):
         self.ff_log(self.ff_metric("url", 
             {"total_time_ms": math.ceil(response_time), "content_length_bytes": response_length},
-            {"operation": name, "method": request_type.upper()}))
+            {"operation": name, "method": request_type.upper(), "is_success": True}))
 
     ##############################################################################
     # Fired when a request fails. This event is typically used to report failed requests when writing custom clients for locust.
