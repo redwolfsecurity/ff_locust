@@ -66,9 +66,9 @@ class FF_Locust():
     # response_length:Content-length of the response
     # **kw is future proofing against addition of new parameters
     def hook_request_success(self, request_type, name, response_time, response_length, **kw):
-        self.ff_log(self.ff_metric("request_success", 
-            {"response_time_ms": math.ceil(response_time), "content_length": response_length},
-            {"name": name, "request_type": request_type}))
+        self.ff_log(self.ff_metric("url", 
+            {"response_time_ms": math.ceil(response_time), "content_length_bytes": response_length},
+            {"operation": name, "method": request_type.upper()}))
 
     ##############################################################################
     # Fired when a request fails. This event is typically used to report failed requests when writing custom clients for locust.
@@ -80,9 +80,9 @@ class FF_Locust():
     # exception:Exception instance that was thrown
     # **kw is future proofing against addition of new parameters
     def hook_request_fail(self, request_type, name, response_time, response_length, exception, **kw):
-        self.ff_log(self.ff_metric("request_failure",
-            {"response_time_ms": math.ceil(response_time), "content_length": response_length, "exception": str(exception)},
-            {"name": name, "request_type": request_type, "is_error": True}))
+        self.ff_log(self.ff_metric("url",
+            {"response_time_ms": math.ceil(response_time), "content_length_bytes": response_length, "exception": str(exception)},
+            {"operation": name, "method": request_type.upper(), "is_error": True}))
 
     ##############################################################################
     # Fired when all simulated users has been spawned.
