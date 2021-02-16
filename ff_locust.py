@@ -207,18 +207,20 @@ class FF_Locust():
         if tsv is None:
             self.error({"description": "No tsv provided to set metadata for.", "is_error": True})
             return
+        # strip .tsv of file to check against state (self.tables)
         if table[-4:] == '.tsv':
             table = table[:-4]
         if table not in self.tables:
             self.tables[table] = {
-                "__index": 0
+                "__index": 0,
+                '__remaining_count': len(tsv) - 1,
             }
         self.tables[table].update({
             '__list': table,
             '__timestamp_epoch_ms': round(time.time() * 1000),
-            '__remaining_count': len(tsv) - self.tables[table]['__index'],
             '__list_count': len(tsv)
         })
+        # print(self.tables[table])
 
     def set_next_index(self, table):
         if table is None:
@@ -233,6 +235,19 @@ class FF_Locust():
             self.error({"description": "Table metadata not set, index must be set before increasing it.", "is_error": True})
             return
         self.tables[table]['__index'] += 1
+
+    # calculate and update remaining count if table is tracked (metadata exists already).
+    def update_remaining_count(self, table, tsv):
+        if table is None:
+            self.error({"description": "No table provided to set metadata for.", "is_error": True})
+            return
+        if table[-4:] == '.tsv':
+            table = table[:-4]
+        if table not in self.tables:
+            self.error({"description": "Table metadata not found. Unable to update remaining count with no state recorded previously.", "is_error": True})
+            return
+        # print('update REMAINING', self.tables[table])
+        self.tables[table]['__remaining_count'] = len(tsv) - self.tables[table]['__index'] - 1
 
     def get_data_next(self, table = None, looping = True):
         if table == None:
@@ -252,7 +267,7 @@ class FF_Locust():
                 df = pd.read_csv(file_path, sep='\t', header=0)
                 tsv = list(df.T.to_dict().values())
             except Exception as error:
-                self.error({"description": "Failed to read tsv file {}. Check it's existence and ensure it is a well formatted tsv file with column headers.".format(file_path), "is_error": True})
+                self.error({"description": "Failed to read tsv file {}. Check it's existence and ensure it is a well formatted tsv file with column headers.".format(file_path), "is_error": True, "error": error})
                 return False
             # We set table metadata (if metadata is already set its updated and index remains the same)
             self.set_table_metadata(table, tsv)
@@ -266,12 +281,15 @@ class FF_Locust():
             #    'first_name': 'John',
             #    'last_name': 'Doe'
             # }
+            self.update_remaining_count(table, tsv)
             metadata = self.get_table_metadata(table) # get table metadata (__ attributes above)
             index = metadata["__index"]
             if (looping and index == metadata['__list_count']):
                 # reset index
                 index = 0
                 self.tables[table[:-4]]['__index'] = 0
+                # reset metadata with new index
+                self.update_remaining_count(table, tsv)
             if (not looping and index == metadata['__list_count']):
                 return None
             result = tsv[index] # get tsv row at index
@@ -343,7 +361,7 @@ class FF_Locust():
                 result.update(metadata)
                 return result
             except Exception as error:
-                self.error({"description": "Failed to read tsv file {}. Check it's existence and ensure it is a well formatted tsv file with column headers.".format(file_path), "is_error": True})
+                self.error({"description": "Failed to read tsv file {}. Check it's existence and ensure it is a well formatted tsv file with column headers.".format(file_path), "is_error": True,  "error": error})
                 return False
         else:
             # Check if table has .extension and strip
