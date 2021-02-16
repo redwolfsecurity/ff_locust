@@ -17,6 +17,8 @@ import random
 # Pandas - a greate data management tool
 # Used to read tsv
 import pandas as pd
+# math to compute ceil of floating point ms measurements
+import math
 
 
 class FF_Locust():    
@@ -65,7 +67,7 @@ class FF_Locust():
     # **kw is future proofing against addition of new parameters
     def hook_request_success(self, request_type, name, response_time, response_length, **kw):
         self.ff_log(self.ff_metric("request_success", 
-            {"response_time_ms": response_time, "content_length": response_length},
+            {"response_time_ms": math.ceil(response_time), "content_length": response_length},
             {"name": name, "request_type": request_type}))
 
     ##############################################################################
@@ -79,7 +81,7 @@ class FF_Locust():
     # **kw is future proofing against addition of new parameters
     def hook_request_fail(self, request_type, name, response_time, response_length, exception, **kw):
         self.ff_log(self.ff_metric("request_failure",
-            {"response_time_ms": response_time, "content_length": response_length, "exception": str(exception)},
+            {"response_time_ms": math.ceil(response_time), "content_length": response_length, "exception": str(exception)},
             {"name": name, "request_type": request_type, "is_error": True}))
 
     ##############################################################################
@@ -323,7 +325,23 @@ class FF_Locust():
             try:
                 df = pd.read_csv(file_path, sep='\t', header=0)
                 tsv = list(df.T.to_dict().values())
-                return random.choice(tsv)
+                self.set_table_metadata(table, tsv)
+                 # We must return an object like:
+                # {
+                #    '__list': 'users',
+                #    '__timestamp_epoch_ms': 1613070277418,
+                #    '__index': 0,
+                #    '__remaining_count': 1,
+                #    '__list_count': 1,
+                #    'first_name': 'John',
+                #    'last_name': 'Doe'
+                # }
+                index = random.choice(range(len(tsv)))
+                result = tsv[index]
+                metadata = self.get_table_metadata(table)
+                metadata['__index'] = index
+                result.update(metadata)
+                return result
             except Exception as error:
                 self.error({"description": "Failed to read tsv file {}. Check it's existence and ensure it is a well formatted tsv file with column headers.".format(file_path), "is_error": True})
                 return False
