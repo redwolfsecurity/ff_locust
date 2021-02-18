@@ -419,7 +419,7 @@ class FF_Locust():
                 "request_fail_count": entry.num_failures,
                 "request_success_count": entry.num_requests - entry.num_failures, # ??
                 "request_count": entry.num_requests,
-                "average_time_ms": entry.avg_response_time,
+                "average_time_ms": math.ceil(entry.avg_response_time),
                 "minimum_time_ms": math.ceil(entry.min_response_time),
                 "maximum_time_ms": math.ceil(entry.max_response_time),
                 "median_time_ms": math.ceil(entry.median_response_time),
