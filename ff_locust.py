@@ -1,5 +1,5 @@
 # Manage locust event hooks
-from locust import events
+from locust import events, runners, stats
 # Create JSON from python objects
 import json
 # Create MS timestamps
@@ -19,6 +19,8 @@ import random
 import pandas as pd
 # math to compute ceil of floating point ms measurements
 import math
+# run aggregate metrics on interval
+import gevent
 
 
 class FF_Locust():    
@@ -36,6 +38,7 @@ class FF_Locust():
         events.report_to_master.add_listener(self.hook_report_to_master)
         self.url = os.getenv('FF_TABLE_SERVER_URL')
         self.tables = {} # store table state
+        self.runner = None
         # self.table = os.getenv('TABLE')
         if self.url is None:
             self.is_local = True
@@ -131,6 +134,8 @@ class FF_Locust():
     # environment:Locust environment instance 
     # **kw is future proofing against addition of new parameters
     def hook_quitting(self, environment, **kw):
+        if self.stats_printer is not None:
+            self.stats_printer.kill(block=False)
         self.ff_log(self.ff_metric("quitting",
             {"count": 1}, {"url": environment.host}))
 
@@ -166,6 +171,8 @@ class FF_Locust():
     # environment:Environment instance
     # **kw is future proofing against addition of new parameters
     def hook_init(self, environment, **kw):
+        self.runner = environment.runner
+        self.stats_printer = gevent.spawn(self.stats_printer(self.runner.stats))
         self.ff_log(self.ff_metric("init", {"count": 1}, {"url": environment.host}))
 
     # Create self.ff_metric
@@ -296,6 +303,7 @@ class FF_Locust():
             result = tsv[index] # get tsv row at index
             result.update(metadata) # add metadata
             self.set_next_index(table) # Update table index
+            self.ff_log(result)
             return result
         else:
             # Check if table has .extension and strip
@@ -360,6 +368,7 @@ class FF_Locust():
                 metadata = self.get_table_metadata(table)
                 metadata['__index'] = index
                 result.update(metadata)
+                self.ff_log(result)
                 return result
             except Exception as error:
                 self.error({"description": "Failed to read tsv file {}. Check it's existence and ensure it is a well formatted tsv file with column headers.".format(file_path), "is_error": True,  "error": error})
@@ -381,6 +390,47 @@ class FF_Locust():
             except Exception as error:
                 self.error({"description": "Failed to access ff table service.", "message": error})
         
+
+    # manage interval for stat printing
+    def stats_printer(self, stats):
+        def stats_printer_func():
+            while True:
+                self.print_stats(stats)
+                gevent.sleep(1) # output every second 
+        return stats_printer_func
+
+    # print aggregate stats
+    def print_stats(self, stats):
+        for key in stats.entries.keys():
+            # key is name of run == operation
+            # num_requests 41
+            # num_none_requests 0
+            # num_failures 0
+            # total_response_time 26730.790737085044
+            # response_times {690.0: 1, 1000.0: 1, 710.0: 1, 540.0: 1, 670.0: 5, 940.0: 2, 300.0: 2, 660.0: 6, 920.0: 7, 390.0: 2, 290.0: 3, 320.0: 1, 350.0: 1, 380.0: 1, 900.0: 1, 400.0: 1, 910.0: 2, 470.0: 1, 810.0: 1, 430.0: 1}
+            # min_response_time 286.9249531067908
+            # max_response_time 1018.9234730787575
+            # response_times {690.0: 1, 1000.0: 1, 710.0: 1, 540.0: 1, 670.0: 5, 940.0: 2, 300.0: 2, 660.0: 6, 920.0: 7, 390.0: 2, 290.0: 3, 320.0: 1, 350.0: 1, 380.0: 1, 900.0: 1, 400.0: 1, 910.0: 2, 470.0: 1, 810.0: 1, 430.0: 1}
+            # num_reqs_per_sec {1613680823: 2, 1613680824: 3, 1613680825: 2, 1613680826: 2, 1613680827: 3, 1613680828: 4, 1613680829: 2, 1613680830: 1, 1613680831: 2, 1613680832: 1, 1613680836: 1, 1613680837: 3, 1613680838: 2, 1613680839: 2, 1613680840: 2, 1613680841: 3, 1613680842: 2, 1613680843: 3, 1613680844: 1}
+            # num_fail_per_sec {}
+            # total_content_length 1476
+            entry = stats.entries[key]
+            fields = {
+                "request_fail_count": entry.num_failures,
+                "request_success_count": entry.num_requests - entry.num_failures, # ??
+                "request_count": entry.num_requests,
+                "average_time_ms": entry.avg_response_time,
+                "minimum_time_ms": math.ceil(entry.min_response_time),
+                "maximum_time_ms": math.ceil(entry.max_response_time),
+                "median_time_ms": math.ceil(entry.median_response_time),
+                "requests_per_s": entry.current_rps,
+                "failures_per_s": entry.current_fail_per_sec,
+                "success_per_s": entry.current_rps - entry.current_fail_per_sec,
+            }
+            tags = {
+                "operation": key
+            }
+            self.ff_log(self.ff_metric("operation", fields, tags))
 
     def error(self, error_json):
         self.ff_log(error_json)
