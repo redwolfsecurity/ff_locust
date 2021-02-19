@@ -428,7 +428,8 @@ class FF_Locust():
                 "success_per_s": entry.current_rps - entry.current_fail_per_sec,
             }
             tags = {
-                "operation": key
+                "operation": key[0],
+                "method": key[1].upper()
             }
             self.ff_log(self.ff_metric("operation", fields, tags))
 
