@@ -21,6 +21,8 @@ import pandas as pd
 import math
 # run aggregate metrics on interval
 import gevent
+# Time code execution
+import time
 
 
 class FF_Locust():    
@@ -136,6 +138,8 @@ class FF_Locust():
     def hook_quitting(self, environment, **kw):
         if self.stats_printer is not None:
             self.stats_printer.kill(block=False)
+        if self.percentiles_printer is not None:
+            self.percentiles_printer.kill(block=False)
         self.ff_log(self.ff_metric("quitting",
             {"count": 1}, {"url": environment.host}))
 
@@ -173,6 +177,7 @@ class FF_Locust():
     def hook_init(self, environment, **kw):
         self.runner = environment.runner
         self.stats_printer = gevent.spawn(self.stats_printer(self.runner.stats))
+        self.percentiles_printer = gevent.spawn(self.percentiles_printer(self.runner.stats))
         self.ff_log(self.ff_metric("init", {"count": 1}, {"url": environment.host}))
 
     # Create self.ff_metric
@@ -432,6 +437,32 @@ class FF_Locust():
                 "method": key[1].upper()
             }
             self.ff_log(self.ff_metric("operation", fields, tags))
+
+    # manage interval for percentile stat printing
+    def percentiles_printer(self, stats):
+        def percentiles_printer_func():
+            while True:
+                self.print_percentiles(stats)
+                gevent.sleep(1) # output every second 
+        return percentiles_printer_func
+
+    def print_percentiles(self, stats):
+        for key in sorted(stats.entries.keys()):
+            stat_object = stats.entries[key]
+            if stat_object.response_times:
+                t0 = round(time.time() * 1000)
+                fields = {
+                    "95th": math.ceil(stat_object.get_response_time_percentile(0.95)),
+                    "90th": math.ceil(stat_object.get_response_time_percentile(0.90))
+                }
+                tags = {
+                    "operation": key[0],
+                    "method": key[1].upper()
+                }
+                self.ff_log(self.ff_metric("operation", fields, tags))
+                t1 = round(time.time() * 1000)
+                total_time_ms = t1 - t0
+                self.ff_log(self.ff_metric("method", {"time_total_ms": total_time_ms, "bin_count": len(stat_object.response_times)}, {"method": "percentiles"}))
 
     def error(self, error_json):
         self.ff_log(error_json)
