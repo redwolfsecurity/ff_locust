@@ -297,7 +297,7 @@ class FF_Locust():
             self.update_remaining_count(table, tsv)
             metadata = self.get_table_metadata(table) # get table metadata (__ attributes above)
             index = metadata["__index"]
-            if (looping and index == metadata['__list_count']):
+            if (looping and index < metadata['__list_count']):
                 # reset index
                 index = 0
                 self.tables[table[:-4]]['__index'] = 0
@@ -315,32 +315,47 @@ class FF_Locust():
             if (table[-4:].lower() == '.tsv'):
                 table = table.split('.')[0]
             if (table not in self.tables):
-                self.tables[table] = {"is_done": False}
+                # We don't know current state of list, we must retrieve this so we can know if we need to stop loop
+                try:
+                    request = requests.get(self.url + 'list/get/' + table + '/metadata')
+                    if request.status_code == 200:
+                        data = request.json()
+                        if ('is_error' in data):
+                            self.error({"description": "Table service reported an error on /metadata endpoint.", "message": data['short_description']})
+                            return False
+                        self.tables[table] = data
+                    else:
+                        self.error({"description": "Failed to access ff table service /metadata endpoint.", "status_code": request.status_code}) 
+                except Exception as error:
+                    self.error({"description": "Failed to access ff table service /metadata endpoint.", "message": error})
+                    return False
             try:
                 request = requests.get(self.url + 'list/get/' + table + '/next')
                 if request.status_code == 200:
                     data = request.json()
                     if ('is_error' in data):
-                        self.error({"description": "Table service reported an error.", "message": data['short_description']})
+                        self.error({"description": "Table service reported an error on /next endpoint.", "message": data['short_description']})
                         return False
                     if (not looping):
-                        if (data['__remaining_count'] == 1 and not self.tables[table]['is_done']):
-                            self.tables[table] = {"is_done": True}
+                        if (data['loop_count'] == self.tables[table]['loop_count']):
                             self.ff_log(data)
                             return data
+                        elif data['loop_count'] != self.tables[table]['loop_count'] and 'is_done' not in self.tables[table]:
+                            self.tables[table]['is_done'] = True
+                            self.event({"description": "Loop was detected in list '" + table + "'. get_data_next is running with looping = False so will return None from now on."})
+                            return None
                         else:
-                            if ('is_done' in self.tables[table]):
-                                if (self.tables[table]["is_done"]):
-                                    return None
-                        self.ff_log(data)
-                        return data
+                            return None
+                        # self.ff_log(data)
+                        # return data
                     else:
                         self.ff_log(data)
                         return data
                 else:
-                    self.error({"description": "Failed to access ff table service.", "status_code": request.status_code})    
+                    self.error({"description": "Failed to access ff table service /next endpoint.", "status_code": request.status_code})    
             except Exception as error:
-                self.error({"description": "Failed to access ff table service.", "message": error})
+                self.error({"description": "Failed to access ff table service /next endpoint.", "message": error})
+                return False
 
     def get_data_random(self, table = None):
         if table == None:
@@ -465,9 +480,17 @@ class FF_Locust():
                 self.ff_log(self.ff_metric("method", {"time_total_ms": total_time_ms, "bin_count": len(stat_object.response_times)}, {"method": "percentiles"}))
 
     def error(self, error_json):
+        if ('is_error' not in error_json):
+            error_json['is_error'] = True
+        if ('mime_type' not in error_json):
+            error_json['mime_type'] = 'locust/error'
         self.ff_log(error_json)
     
     def event(self, event_json):
+        if ('is_event' not in event_json):
+            event_json['is_event'] = True
+        if ('mime_type' not in event_json):
+            event_json['mime_type'] = 'locust/event'
         self.ff_log(event_json)
 
     # helper to create FF_LOG formatted metrics JSON logs
