@@ -17,6 +17,6 @@
   },
   "homepage": "https://github.com/redwolfsecurity/ff_locust#readme",
   "dependencies": {
-    "aws-sdk": "^2.682.0"
+    "aws-sdk": "^2.1354.0"
   }
 }
